@@ -2,11 +2,12 @@
 use strict;
 use warnings;
 use Cwd qw(abs_path getcwd);
-use File::Spec;
 use File::Path qw(make_path);
 use File::Find;
 use File::Temp qw(tempfile);
 $ENV{GH_HOST} = 'github.com';
+my %CONFIG;
+my $terminal_failed = 0;
 
 # Capture commands using temporary files to avoid pipe-buffer deadlocks.
 sub run {
@@ -34,6 +35,17 @@ sub cmd {
     die($err || $out || "Command failed: $args[0]\n") if $code;
     $out =~ s/\r?\n\z//;
     return $out;
+}
+sub load_config {
+    my $manager = ($ENV{R_HOME} // "$ENV{HOME}/Repo") . '/conf.zsh';
+    die "Missing configuration manager: $manager. Run install.zsh.\n" unless -f $manager;
+    my $data = cmd('zsh', $manager, '--env');
+    my %settings;
+    for my $line (split /\n/, $data) {
+        my ($key, $value) = split /=/, $line, 2;
+        $settings{$key} = $value;
+    }
+    return %settings;
 }
 sub git { my $p = shift; return cmd('git', '-C', $p, @_); }
 sub attempt { my $p = shift; return run('git', '-C', $p, @_); }
@@ -70,9 +82,11 @@ sub nonempty {
 sub candidates {
     my ($root) = @_;
     my @paths = (getcwd());
+    if ($CONFIG{USE_GHQ} eq 'true') {
     my ($code, $out, $err) = run('ghq', 'list', '--full-path');
     if (!$code) { push @paths, split /\n/, $out; }
     elsif ($code != 127) { die $err || "ghq list failed.\n"; }
+    }
     find({no_chdir => 1, wanted => sub {
         return unless -d $_;
         my $p = $File::Find::name;
@@ -83,8 +97,10 @@ sub candidates {
 }
 sub sync_repo {
     my ($p, $r) = @_;
+    if (length git($p, 'status', '--porcelain')) {
+        die bless { path => abs_path($p), message => "Working tree has changes; synchronization skipped: $p\n" }, 'RepoDirty';
+    }
     git($p, 'fetch', $r, '--prune');
-    die "Working tree has changes; synchronize manually: $p\n" if length git($p, 'status', '--porcelain');
     my $branch = git($p, 'symbolic-ref', '--quiet', '--short', 'HEAD');
     my $refs = git($p, 'for-each-ref', '--format=%(refname)', "refs/remotes/$r/");
     return unless length $refs;
@@ -96,6 +112,52 @@ sub sync_repo {
     git($p, 'branch', "--set-upstream-to=$r/$branch", $branch);
     my $ahead = git($p, 'rev-list', '--count', "$target..HEAD");
     print STDERR "Local commits ahead ($ahead); push manually: $p\n" if $ahead ne '0';
+}
+sub open_web {
+    my ($full) = @_;
+    return unless $CONFIG{OPEN_WEB} eq 'true';
+    my $restore = $CONFIG{RETURN_TERMINAL} eq 'true' && ($ENV{R_DEFER_FOCUS} // '') ne '1';
+    my $helper = ($ENV{R_HOME} // "$ENV{HOME}/Repo") . '/term.zsh';
+    my $app = $ENV{R_RETURN_APP} // '';
+    if ($restore && !length $app) {
+        my ($code, $out) = run('zsh', $helper, 'capture');
+        chomp $out;
+        $app = $code ? '' : $out;
+    }
+    my ($web) = run('gh', 'repo', 'view', $full, '--web');
+    print STDERR "Open https://github.com/$full\n" if $web;
+    if ($restore) {
+        if (!length $app) {
+            print STDERR "Could not identify the invoking terminal; focus return was not attempted.\n";
+            $terminal_failed = 1;
+            return;
+        }
+        my $caller_tty = $ENV{R_CALLER_TTY} // '';
+        if (!length $caller_tty) {
+            my ($no_tty, $detected) = run('tty');
+            chomp $detected;
+            $caller_tty = $detected unless $no_tty;
+        }
+        my ($code, undef, $error) = run('zsh', $helper, 'restore', $app, $caller_tty,
+                                      $ENV{R_FOCUS_DEBUG} // $CONFIG{FOCUS_DEBUG});
+        print STDERR $error if length $error;
+        $terminal_failed = 1 if $code;
+    }
+}
+sub validate_remotes {
+    my ($path, $full) = @_;
+    for my $remote (split /\n/, git($path, 'remote')) {
+        for my $field ('url', 'pushurl') {
+            my ($code, $out) = attempt($path, 'config', '--get-all', "remote.$remote.$field");
+            next if $code == 1 && $field eq 'pushurl';
+            die "Cannot read remote $field for $remote: $path\n" if $code;
+            my @urls = split /\n/, $out;
+            die "Conflicting remote $field for $remote: $path\n" unless @urls;
+            for my $url (@urls) {
+                die "Conflicting remote $field for $remote: $path\n" unless remote_id($url) eq lc $full;
+            }
+        }
+    }
 }
 sub prepare {
     my ($root, $owner, $name) = @_;
@@ -117,33 +179,29 @@ sub prepare {
     if (-e $dest) {
         die "Destination is not a directory: $dest\n" unless -d $dest;
         if (isroot($dest)) {
-            for my $r (split /\n/, git($dest, 'remote')) {
-                my $url = git($dest, 'config', '--get', "remote.$r.url");
-                die "Conflicting remote $r: $url\n" unless remote_id($url) eq lc $full;
-            }
+            validate_remotes($dest, $full);
         } else {
             my ($inside) = attempt($dest, 'rev-parse', '--show-toplevel');
             die "Destination is inside another repository: $dest\n" unless $inside;
             die "Nonempty unlinked directory: $dest\n" if !$new && nonempty($dest);
         }
     }
-    cmd('gh', 'repo', 'create', $full, '--private') if $new;
-    my ($web) = run('gh', 'repo', 'view', $full, '--web');
-    print STDERR "Open https://github.com/$full\n" if $web;
+    cmd('gh', 'repo', 'create', $full, '--' . $CONFIG{VISIBILITY}) if $new;
+    open_web($full);
     if (!-e $dest || (!isroot($dest) && !nonempty($dest))) {
         cmd('gh', 'repo', 'clone', $full, $dest);
     } else {
-        git($dest, 'init', '-b', 'main') unless isroot($dest);
+        git($dest, 'init', '-b', $CONFIG{DEFAULT_BRANCH}) unless isroot($dest);
         my ($missing) = attempt($dest, 'config', '--get', "remote.$remote.url");
         git($dest, 'remote', 'add', $remote, "https://github.com/$full.git") if $missing;
-        if ($new) {
+        if ($new && $CONFIG{IMPORT_EXISTING} eq 'true') {
             git($dest, 'add', '--all');
             my ($diff, undef, $error) = attempt($dest, 'diff', '--cached', '--quiet');
             die $error if $diff > 1;
-            git($dest, 'commit', '-m', 'Import existing files') if $diff == 1;
+            git($dest, 'commit', '-m', $CONFIG{COMMIT_MESSAGE}) if $diff == 1;
             my ($nohead) = attempt($dest, 'rev-parse', '--verify', 'HEAD');
             git($dest, 'push', '--set-upstream', $remote, 'HEAD') unless $nohead;
-        } else { sync_repo($dest, $remote); }
+        } elsif (!$new && $CONFIG{SYNC_EXISTING} eq 'true') { sync_repo($dest, $remote); }
     }
     print STDERR "Ready: $dest\n";
     return abs_path($dest);
@@ -151,33 +209,50 @@ sub prepare {
 sub main {
     if (grep { $_ eq '-h' || $_ eq '--help' || $_ eq "\x{2014}help" || $_ eq "\xE2\x80\x94help" } @ARGV) {
         print <<'HELP';
-Usage: repo.pl [--] [NAME ...]
-Prepare private GitHub repositories for the authenticated user.
-Prompt for missing/invalid names and open every repository in the browser.
-Reuse linked repositories under Projects, ghq roots, or the current directory.
-Otherwise clone to ~/Projects/NAME. Import existing files into new remotes.
-Existing remotes: fetch and fast-forward only with a clean working tree.
-Use shell.zsh to change the caller's directory. R_PROJECTS overrides ~/Projects.
-Names: 1-100 ASCII letters, digits, dots, underscores, hyphens; not ., .., or names ending in .git.
-Dependencies: git, gh, Perl core modules. Optional fuzzy navigation: ghq and fzf.
--h, --help  Show this help.
+repo - Prepare GitHub repositories for local development.
+Settings: ~/Repo/rep.conf (created automatically when missing).
+
+Usage: repo [NAME ...]
+
+Examples:
+  repo                 Prompt for a repository name.
+  repo alpha beta      Prepare both; enter alpha via shell integration.
+
+Arguments:
+  NAME ...             Repository names; prompt if omitted or invalid.
+
+Options:
+  -h, --help           Show this help.
+
+Exit status:
+  0                    Success (including help).
+  nonzero              Failure or cancellation.
 HELP
         return 0;
     }
+    %CONFIG = load_config();
     shift @ARGV if @ARGV && $ARGV[0] eq '--';
     my @names = map { read_name($_) } (@ARGV ? @ARGV : ('') );
     cmd('git', '--version'); cmd('gh', 'auth', 'status', '--hostname', 'github.com');
     my $owner = cmd('gh', 'api', 'user', '--jq', '.login');
-    my $root = $ENV{R_PROJECTS} // "$ENV{HOME}/Projects";
+    my $root = $ENV{R_PROJECTS} // $CONFIG{PROJECTS_DIR};
     $root =~ s{\A~/}{$ENV{HOME}/};
     make_path($root); $root = abs_path($root);
     my ($first, $failed) = ('', 0);
     for my $i (0..$#names) {
         eval { my $p = prepare($root, $owner, $names[$i]); $first = $p if $i == 0; 1 }
-            or do { print STDERR "Error [$names[$i]]: $@"; $failed = 1; };
+            or do {
+                my $error = $@;
+                if (ref($error) eq 'RepoDirty') {
+                    $first = $error->{path} if $i == 0;
+                    $error = $error->{message};
+                }
+                print STDERR "Error [$names[$i]]: $error";
+                $failed = 1;
+            };
     }
     print "$first\n" if length $first;
-    return $failed;
+    return ($failed || $terminal_failed) ? 1 : 0;
 }
 my $status;
 eval { $status = main(); 1 } or do { print STDERR "Error: $@"; $status = 1; };

@@ -9,18 +9,24 @@ import sys
 
 os.environ["GH_HOST"] = "github.com"
 
-HELP = """Usage: repo.py [--] [NAME ...]
-Prepare repositories on github.com for the authenticated GitHub user.
-Prompt for missing or invalid names. Create new repositories as private.
-Reuse linked repositories found under ~/Projects, the current directory,
-and ghq roots; otherwise use ~/Projects/NAME. Open every repository on the web.
-New remotes: stage, commit, and push existing local files (respect .gitignore).
-Existing remotes: fetch; fast-forward only when the working tree is clean.
-No force pushes, automatic merges, remote replacement, or unrelated history merges.
--h, --help  Show this help. Use the supplied zsh functions to change shell directory.
-Dependencies: git, gh, Python 3. Optional: ghq and fzf for the rf shell function.
-Environment: R_PROJECTS (default ~/Projects). Names: ASCII letters, digits, . _ -,
-1-100 characters, excluding ., .., and names ending in .git. Repository names, not owner/name, are accepted.
+HELP = """repo - Prepare GitHub repositories for local development.
+Settings: ~/Repo/rep.conf (created automatically when missing).
+
+Usage: repo [NAME ...]
+
+Examples:
+  repo                 Prompt for a repository name.
+  repo alpha beta      Prepare both; enter alpha via shell integration.
+
+Arguments:
+  NAME ...             Repository names; prompt if omitted or invalid.
+
+Options:
+  -h, --help           Show this help.
+
+Exit status:
+  0                    Success (including help).
+  nonzero              Failure or cancellation.
 """
 
 
@@ -30,6 +36,18 @@ def run(*args, cwd=None, check=True):
     if check and p.returncode:
         raise RuntimeError(p.stderr.strip() or p.stdout.strip() or f"Command failed: {args[0]}")
     return p
+
+
+CONFIG = {}
+TERMINAL_FAILED = False
+
+
+def load_config():
+    manager = Path(os.environ.get("R_HOME", str(Path.home() / "Repo"))) / "conf.zsh"
+    if not manager.is_file():
+        raise RuntimeError(f"Missing configuration manager: {manager}. Run install.zsh.")
+    data = run("zsh", str(manager), "--env").stdout
+    return dict(line.split("=", 1) for line in data.splitlines() if line)
 
 
 def say(message):
@@ -68,7 +86,7 @@ def is_root(path):
 
 def candidates(root):
     found = {Path.cwd().resolve()}
-    if shutil.which("ghq"):
+    if CONFIG["USE_GHQ"] == "true" and shutil.which("ghq"):
         p = run("ghq", "list", "--full-path", check=False)
         if p.returncode:
             raise RuntimeError(p.stderr.strip() or "ghq list failed.")
@@ -98,10 +116,17 @@ def choose_path(root, name, full):
     return dest, "origin"
 
 
+class DirtyWorktreeError(RuntimeError):
+    """Keep the validated local destination available when synchronization stops."""
+    def __init__(self, path):
+        self.path = path.resolve()
+        super().__init__(f"Working tree has changes; synchronization skipped: {path}")
+
+
 def sync(path, remote):
-    git(path, "fetch", remote, "--prune")
     if git(path, "status", "--porcelain").stdout:
-        raise RuntimeError(f"Working tree has changes; synchronize manually: {path}")
+        raise DirtyWorktreeError(path)
+    git(path, "fetch", remote, "--prune")
     branch = git(path, "symbolic-ref", "--quiet", "--short", "HEAD", check=False)
     if branch.returncode:
         raise RuntimeError(f"Detached HEAD; select a branch: {path}")
@@ -120,6 +145,51 @@ def sync(path, remote):
     ahead = git(path, "rev-list", "--count", f"{target}..HEAD").stdout.strip()
     if ahead != "0":
         say(f"Local commits are ahead of the remote ({ahead}); push them manually: {path}")
+
+
+def open_web(full):
+    global TERMINAL_FAILED
+    if CONFIG["OPEN_WEB"] != "true":
+        return
+    restore = CONFIG["RETURN_TERMINAL"] == "true" and os.environ.get("R_DEFER_FOCUS") != "1"
+    helper = Path(os.environ.get("R_HOME", str(Path.home() / "Repo"))) / "term.zsh"
+    terminal_app = os.environ.get("R_RETURN_APP", "")
+    if restore and not terminal_app:
+        capture = run("zsh", str(helper), "capture", check=False)
+        terminal_app = capture.stdout.strip() if capture.returncode == 0 else ""
+    browser = run("gh", "repo", "view", full, "--web", check=False)
+    if browser.returncode:
+        say(f"Could not open browser: https://github.com/{full}")
+    if restore:
+        if not terminal_app:
+            say("Could not identify the invoking terminal; focus return was not attempted.")
+            TERMINAL_FAILED = True
+            return
+        caller_tty = os.environ.get("R_CALLER_TTY", "")
+        if not caller_tty:
+            try:
+                caller_tty = os.ttyname(0)
+            except OSError:
+                pass
+        result = run("zsh", str(helper), "restore", terminal_app, caller_tty,
+                     os.environ.get("R_FOCUS_DEBUG", CONFIG["FOCUS_DEBUG"]), check=False)
+        if result.stderr.strip():
+            say(result.stderr.strip())
+        TERMINAL_FAILED = TERMINAL_FAILED or result.returncode != 0
+
+
+def validate_remotes(path, full):
+    # Git can fetch from its first URL and push to separately configured URLs.
+    for remote in git(path, "remote").stdout.splitlines():
+        for field in ("url", "pushurl"):
+            result = git(path, "config", "--get-all", f"remote.{remote}.{field}", check=False)
+            if result.returncode == 1 and field == "pushurl":
+                continue
+            if result.returncode:
+                raise RuntimeError(f"Cannot read remote {field} for {remote}: {path}")
+            for url in result.stdout.splitlines():
+                if remote_id(url) != full.lower():
+                    raise RuntimeError(f"Conflicting remote {field} for {remote}: {path}")
 
 
 def prepare(root, owner, name):
@@ -142,44 +212,41 @@ def prepare(root, owner, name):
             if parent_repo.returncode == 0:
                 raise RuntimeError(f"Destination is inside another repository: {path}")
         if is_root(path):
-            for r in git(path, "remote").stdout.splitlines():
-                url = git(path, "config", "--get", f"remote.{r}.url").stdout.strip()
-                if remote_id(url) != full.lower():
-                    raise RuntimeError(f"Conflicting remote {r} at {path}: {url}")
+            validate_remotes(path, full)
         elif not new and any(path.iterdir()):
             raise RuntimeError(f"Existing remote and nonempty unlinked directory: {path}")
     if new:
-        run("gh", "repo", "create", full, "--private")
-    browser = run("gh", "repo", "view", full, "--web", check=False)
-    if browser.returncode:
-        say(f"Could not open browser: https://github.com/{full}")
+        run("gh", "repo", "create", full, "--" + CONFIG["VISIBILITY"])
+    open_web(full)
     if not path.exists() or (not is_root(path) and not any(path.iterdir())):
         run("gh", "repo", "clone", full, str(path))
     else:
         if not is_root(path):
-            git(path, "init", "-b", "main")
+            git(path, "init", "-b", CONFIG["DEFAULT_BRANCH"])
         if remote not in git(path, "remote").stdout.splitlines():
             git(path, "remote", "add", remote, f"https://github.com/{full}.git")
-        if new:
+        if new and CONFIG["IMPORT_EXISTING"] == "true":
             git(path, "add", "--all")
             diff = git(path, "diff", "--cached", "--quiet", check=False)
             if diff.returncode not in (0, 1):
                 raise RuntimeError(diff.stderr.strip())
             if diff.returncode == 1:
-                git(path, "commit", "-m", "Import existing files")
+                git(path, "commit", "-m", CONFIG["COMMIT_MESSAGE"])
             if git(path, "rev-parse", "--verify", "HEAD", check=False).returncode == 0:
                 git(path, "push", "--set-upstream", remote, "HEAD")
-        else:
+        elif not new and CONFIG["SYNC_EXISTING"] == "true":
             sync(path, remote)
     say(f"Ready: {path}")
     return path.resolve()
 
 
 def main():
+    global CONFIG
     args = sys.argv[1:]
     if "-h" in args or "--help" in args or "—help" in args:
         print(HELP)
         return 0
+    CONFIG = load_config()
     if args[:1] == ["--"]:
         args.pop(0)
     names = [read_name(s) for s in args] if args else [read_name()]
@@ -188,7 +255,7 @@ def main():
             raise RuntimeError(f"Missing dependency: {dependency}")
     run("gh", "auth", "status", "--hostname", "github.com")
     owner = run("gh", "api", "user", "--jq", ".login").stdout.strip()
-    root = Path(os.environ.get("R_PROJECTS", "~/Projects")).expanduser().resolve()
+    root = Path(os.environ.get("R_PROJECTS", CONFIG["PROJECTS_DIR"])).expanduser().resolve()
     root.mkdir(parents=True, exist_ok=True)
     first, failed = None, False
     for i, name in enumerate(names):
@@ -197,11 +264,13 @@ def main():
             if i == 0:
                 first = path
         except RuntimeError as error:
+            if i == 0 and isinstance(error, DirtyWorktreeError):
+                first = error.path
             failed = True
             say(f"Error [{name}]: {error}")
     if first:
         print(first)
-    return 1 if failed else 0
+    return 1 if failed or TERMINAL_FAILED else 0
 
 
 if __name__ == "__main__":
