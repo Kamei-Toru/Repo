@@ -29,8 +29,6 @@ existing repository, then run from the extracted `Repo` directory:
 
 ```zsh
 zsh repo_install.zsh
-# Version 1.1
-# This script was generated using GitHub
 source ~/.zshrc
 repo --version
 ```
