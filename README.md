@@ -33,7 +33,7 @@ source ~/.zshrc
 repo --version
 ```
 
-Expected shell version: `Repo shell 20261115.6`.
+Expected shell version: `Repo shell 1.6`.
 
 The installer updates named files individually in `~/Projects/Repo` and creates
 matching links in `~/Repo`. It keeps `.git`, unrelated files, and existing
