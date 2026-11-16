@@ -4,7 +4,7 @@
 # This script was generated using GitHub.
 emulate -LR zsh
 if [[ ${1:-} == -h || ${1:-} == --help || ${1:-} == —help ]]; then
-  print 'Usage: zsh install.zsh'
+  print 'Usage: zsh repo_install.zsh'
   print 'Validate configuration, back up changed files, then install Repo and links.'
   print 'Exit status: 0 success or help; 1 installation error; 2 invalid argument; 130 cancelled.'
   exit 0
@@ -25,7 +25,10 @@ import time
 
 VERSION = '1.6'
 FILES = ('README.md', 'REVIEW.md', 'repo.zsh', 'repo.pl', 'repo.py', 'shell.zsh',
-         'conf.zsh', 'term.zsh', 'install.zsh', 'test_local.py', 'test_config.py')
+         'conf.zsh', 'term.zsh', 'repo_install.zsh', 'test_local.py', 'test_config.py')
+# Version 1.1
+
+# This script was generated using GitHub
 source = Path(sys.argv[1])
 home = Path.home()
 actual = home / 'Projects/Repo'
