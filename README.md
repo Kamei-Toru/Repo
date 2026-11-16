@@ -28,7 +28,9 @@ Configure your Git name and email if needed. Extract the update **outside** the
 existing repository, then run from the extracted `Repo` directory:
 
 ```zsh
-zsh install.zsh
+zsh repo_install.zsh
+# Version 1.1
+# This script was generated using GitHub
 source ~/.zshrc
 repo --version
 ```

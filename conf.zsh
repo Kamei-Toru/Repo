@@ -1,5 +1,7 @@
 #!/bin/zsh
 # Parse literal configuration data. Never source or evaluate rep.conf.
+# Version: 1.6
+# This script was generated using GitHub.
 emulate -LR zsh
 setopt pipefail typesetsilent
 

@@ -1,5 +1,7 @@
 #!/usr/bin/env python3
 """Prepare GitHub repositories. All subprocess arguments are passed without a shell."""
+# Version: 1.6
+# This script was generated using GitHub.
 import os
 from pathlib import Path
 import re

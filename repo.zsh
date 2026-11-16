@@ -1,5 +1,7 @@
 #!/bin/zsh
 # Prepare GitHub repositories; source shell.zsh to change the caller's directory.
+# Version: 1.6
+# This script was generated using GitHub.
 emulate -LR zsh
 setopt pipefail typesetsilent
 export GH_HOST=github.com
