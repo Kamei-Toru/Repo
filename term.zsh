@@ -1,5 +1,7 @@
 #!/bin/zsh
 # Shared terminal activation and verification; called through ~/Repo/term.zsh.
+# Version: 1.6
+# This script was generated using GitHub.
 emulate -LR zsh
 setopt typesetsilent
 REPO_SHELL_VERSION=20261115.6

@@ -1,5 +1,7 @@
 #!/bin/zsh
 # Install an explicitly named file set; preserve Git metadata and user settings.
+# Version: 1.6
+# This script was generated using GitHub.
 emulate -LR zsh
 if [[ ${1:-} == -h || ${1:-} == --help || ${1:-} == —help ]]; then
   print 'Usage: zsh install.zsh'
@@ -21,7 +23,7 @@ import sys
 import tempfile
 import time
 
-VERSION = '20261115.6'
+VERSION = '1.6'
 FILES = ('README.md', 'REVIEW.md', 'repo.zsh', 'repo.pl', 'repo.py', 'shell.zsh',
          'conf.zsh', 'term.zsh', 'install.zsh', 'test_local.py', 'test_config.py')
 source = Path(sys.argv[1])

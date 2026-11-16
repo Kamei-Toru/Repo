@@ -1,7 +1,8 @@
 # Repo shell integration. Runtime scripts are invoked through ~/Repo links.
-# Version: 20261115.6
+# Version: 1.6
 # Source this file from ~/.zshrc.
-typeset -g REPO_SHELL_VERSION=20261115.6
+# This script was generated using GitHub
+typeset -g REPO_SHELL_VERSION=1.6
 typeset -g R_HOME=${R_HOME:-$HOME/Repo}
 _repo_load_config() {
   emulate -L zsh

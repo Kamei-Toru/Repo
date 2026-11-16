@@ -1,4 +1,6 @@
 #!/usr/bin/env perl
+# Version: 1.6
+# This script was generated using GitHub.
 use strict;
 use warnings;
 use Cwd qw(abs_path getcwd);
