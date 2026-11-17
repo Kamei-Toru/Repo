@@ -1,7 +1,7 @@
 #!/bin/zsh
-# Version: 1.7a
-REPO_SCRIPT_VERSION=1.7a
-if (( ${argv[(Ie)--version]} )); then
+# Version: 1.8a
+REPO_SCRIPT_VERSION=1.8a
+if (( ${argv[(Ie)-v]} || ${argv[(Ie)--version]} )); then
   print -r -- "repo_conf.zsh $REPO_SCRIPT_VERSION"
   exit 0
 fi
@@ -18,12 +18,12 @@ Arguments:
   KEY=VALUE             Update a setting; retain other saved/default values.
 Options:
   -d, --dir PATH        Local repository root.
-  -v, --visibility MODE New remote visibility: private or public.
+  --visibility MODE     New remote visibility: private or public.
   --show                Show effective settings.
   --check               Validate only; create no files or directories.
   --reset               Start from defaults instead of saved settings.
   -h, --help            Show this help.
-  --version             Show the script version.
+  -v, --version         Show the script version.
 Examples:
   repo_conf.zsh
   repo_conf.zsh --dir "$HOME/Work" --visibility private
@@ -51,9 +51,9 @@ HELP
         [[ $mode == save || $mode == $val ]] || { print -ru2 'Choose only one of --show, --check, and --env.'; return 2; }
         mode=$val ;;
       --reset) reset=1 ;;
-      -d|--dir|-v|--visibility)
+      -d|--dir|--visibility)
         (( $# )) || { print -ru2 -- "Missing value for $arg"; return 2; }
-        key=PROJECTS_DIR; [[ $arg == -v || $arg == --visibility ]] && key=VISIBILITY
+        key=PROJECTS_DIR; [[ $arg == --visibility ]] && key=VISIBILITY
         updates[$key]=$1; shift ;;
       *=*)
         key=${arg%%=*}

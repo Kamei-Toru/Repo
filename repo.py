@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# Version: 1.7a
+# Version: 1.8a
 """Prepare GitHub repositories. All subprocess arguments are passed without a shell."""
 import os
 from pathlib import Path
@@ -10,7 +10,7 @@ import sys
 
 os.environ["GH_HOST"] = "github.com"
 
-SCRIPT_VERSION = "1.7a"
+SCRIPT_VERSION = "1.8a"
 
 HELP = """repo - Prepare GitHub repositories for local development.
 Settings: ~/Repo/rep.conf (created automatically when missing).
@@ -23,10 +23,11 @@ Examples:
 
 Arguments:
   NAME ...             Repository names; prompt if omitted or invalid.
+                       Skip arguments starting with - (except help/version).
 
 Options:
   -h, --help           Show this help.
-  --version            Show the script version.
+  -v, --version        Show the script version.
 
 Exit status:
   0                    Success (including help).
@@ -247,15 +248,17 @@ def prepare(root, owner, name):
 def main():
     global CONFIG
     args = sys.argv[1:]
-    if "--version" in args:
+    if any(flag in args for flag in ("-v", "--version")):
         print(f"repo.py {SCRIPT_VERSION}")
         return 0
     if "-h" in args or "--help" in args or "—help" in args:
         print(HELP)
         return 0
+    if args:
+        args = [arg for arg in args if not arg.startswith("-")]
+        if not args:
+            return 0
     CONFIG = load_config()
-    if args[:1] == ["--"]:
-        args.pop(0)
     names = [read_name(s) for s in args] if args else [read_name()]
     for dependency in ("git", "gh"):
         if not shutil.which(dependency):

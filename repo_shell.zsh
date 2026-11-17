@@ -1,13 +1,13 @@
 #!/bin/zsh
-# Version: 1.7a
+# Version: 1.8a
 # Sourcing this file must never exit the caller or consume its options.
-if [[ $ZSH_EVAL_CONTEXT != *:file ]] && (( ${argv[(Ie)--version]} )); then
-  print -r -- 'repo_shell.zsh 1.7a'
+if [[ $ZSH_EVAL_CONTEXT != *:file ]] && (( ${argv[(Ie)-v]} || ${argv[(Ie)--version]} )); then
+  print -r -- 'repo_shell.zsh 1.8a'
   exit 0
 fi
 # Repo shell integration. Runtime scripts are invoked through ~/Repo links.
 # Source this file from ~/.zshrc.
-typeset -g REPO_SHELL_VERSION=1.7a
+typeset -g REPO_SHELL_VERSION=1.8a
 typeset -g R_HOME=${R_HOME:-$HOME/Repo}
 _repo_load_config() {
   emulate -L zsh
@@ -37,9 +37,18 @@ _r_call() {
   local -x R_HOME=${R_HOME:-$HOME/Repo}
   local destination rc=0 focus_rc=0
   local -a command_line
-  if (( ${argv[(Ie)--version]} )); then
+  if (( ${argv[(Ie)-v]} || ${argv[(Ie)--version]} )); then
     print -r -- "repo $REPO_SHELL_VERSION"
     return 0
+  fi
+  if (( $# )) && ! (( ${argv[(Ie)-h]} || ${argv[(Ie)--help]} || ${argv[(Ie)—help]} )); then
+    local -a filtered
+    local candidate
+    for candidate in "$@"; do
+      [[ $candidate == -* ]] || filtered+=("$candidate")
+    done
+    (( ${#filtered} )) || return 0
+    set -- "${filtered[@]}"
   fi
   if ! (( ${argv[(Ie)-h]} || ${argv[(Ie)--help]} || ${argv[(Ie)—help]} )); then
     _repo_load_config || return $?
@@ -81,6 +90,11 @@ rf() {
   emulate -L zsh
   local -x R_HOME=${R_HOME:-$HOME/Repo}
   setopt localoptions pipefail
+  if (( ${argv[(Ie)-v]} || ${argv[(Ie)--version]} )); then
+    print -r -- "rf $REPO_SHELL_VERSION"
+    return 0
+  fi
+  (( $# )) && return 0
   _repo_load_config || return $?
   (( $+commands[fzf] )) || { print -ru2 'Missing dependency: fzf'; return 1; }
   if [[ ${REPO_CONFIG[USE_GHQ]} == true ]]; then

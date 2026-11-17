@@ -1,14 +1,14 @@
 #!/bin/zsh
-# Version: 1.7a
-REPO_SCRIPT_VERSION=1.7a
-if (( ${argv[(Ie)--version]} )); then
+# Version: 1.8a
+REPO_SCRIPT_VERSION=1.8a
+if (( ${argv[(Ie)-v]} || ${argv[(Ie)--version]} )); then
   print -r -- "repo_term.zsh $REPO_SCRIPT_VERSION"
   exit 0
 fi
 # Shared terminal activation and verification; called through ~/Repo/repo_term.zsh.
 emulate -LR zsh
 setopt typesetsilent
-REPO_SHELL_VERSION=1.7a
+REPO_SHELL_VERSION=1.8a
 _term_capture() {
   emulate -L zsh
   (( $+commands[osascript] )) || return 1
@@ -138,7 +138,7 @@ case ${1:-} in
   -h|--help|—help)
     print 'term - Shared macOS terminal helper for Repo.'
     print 'Usage: repo_term.zsh capture | restore APP_PATH TTY [true|false|1|0]'
-    print 'Options: -h, --help, --version'
+    print 'Options: -h, --help, -v, --version'
     print 'Exit status: 0 success; 1 unavailable/unverified; 2 invalid arguments.'
     exit 0 ;;
   capture)

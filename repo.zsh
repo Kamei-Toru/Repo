@@ -1,7 +1,7 @@
 #!/bin/zsh
-# Version: 1.7a
-REPO_SCRIPT_VERSION=1.7a
-if (( ${argv[(Ie)--version]} )); then
+# Version: 1.8a
+REPO_SCRIPT_VERSION=1.8a
+if (( ${argv[(Ie)-v]} || ${argv[(Ie)--version]} )); then
   print -r -- "repo.zsh $REPO_SCRIPT_VERSION"
   exit 0
 fi
@@ -23,10 +23,11 @@ Examples:
 
 Arguments:
   NAME ...             Repository names; prompt if omitted or invalid.
+                       Skip arguments starting with - (except help/version).
 
 Options:
   -h, --help           Show this help.
-  --version            Show the script version.
+  -v, --version        Show the script version.
 
 Exit status:
   0                    Success (including help).
@@ -34,8 +35,16 @@ Exit status:
 HELP
     return 0
   fi
+  if (( $# )); then
+    local -a filtered
+    local candidate
+    for candidate in "$@"; do
+      [[ $candidate == -* ]] || filtered+=("$candidate")
+    done
+    (( ${#filtered} )) || return 0
+    set -- "${filtered[@]}"
+  fi
   _r_load_config || return $?
-  [[ $1 == -- ]] && shift
   local root=${R_PROJECTS:-${_r_cfg[PROJECTS_DIR]}} owner name first='' failed=0 i=0
   local -a names
   (( $# )) || set -- ''
