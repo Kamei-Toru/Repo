@@ -1,9 +1,9 @@
 #!/usr/bin/env perl
-# Version: 1.7a
+# Version: 1.8a
 use strict;
 use warnings;
-use constant SCRIPT_VERSION => '1.7a';
-if (grep { $_ eq '--version' } @ARGV) {
+use constant SCRIPT_VERSION => '1.8a';
+if (grep { $_ eq '-v' || $_ eq '--version' } @ARGV) {
     print 'repo.pl ' . SCRIPT_VERSION . "\n";
     exit 0;
 }
@@ -226,10 +226,11 @@ Examples:
 
 Arguments:
   NAME ...             Repository names; prompt if omitted or invalid.
+                       Skip arguments starting with - (except help/version).
 
 Options:
   -h, --help           Show this help.
-  --version            Show the script version.
+  -v, --version        Show the script version.
 
 Exit status:
   0                    Success (including help).
@@ -237,8 +238,11 @@ Exit status:
 HELP
         return 0;
     }
+    if (@ARGV) {
+        @ARGV = grep { !/^-/ } @ARGV;
+        return 0 unless @ARGV;
+    }
     %CONFIG = load_config();
-    shift @ARGV if @ARGV && $ARGV[0] eq '--';
     my @names = map { read_name($_) } (@ARGV ? @ARGV : ('') );
     cmd('git', '--version'); cmd('gh', 'auth', 'status', '--hostname', 'github.com');
     my $owner = cmd('gh', 'api', 'user', '--jq', '.login');

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# Version: 1.7a
+# Version: 1.8a
 """Isolated configuration and runtime tests; no real GitHub or GUI calls."""
 import json
 import sys
@@ -10,7 +10,7 @@ import subprocess
 import tempfile
 import unittest
 
-SCRIPT_VERSION = "1.7a"
+SCRIPT_VERSION = "1.8a"
 
 HERE = Path(__file__).resolve().parent
 FAKE_GH = r'''#!/usr/bin/env python3
@@ -98,7 +98,7 @@ class ConfigurationTests(unittest.TestCase):
         cfg=self.values()
         self.assertEqual(cfg['PROJECTS_DIR'],str(self.home/'Projects'))
         self.assertEqual(cfg['VISIBILITY'],'private')
-        self.assertIn('# Version: 1.7a',(self.actual/'rep.conf').read_text())
+        self.assertIn('# Version: 1.8a',(self.actual/'rep.conf').read_text())
         self.assertTrue((self.public/'rep.conf').is_symlink())
         root=self.home/'Work projects'
         self.conf('--dir',root,'--visibility','public','ENGINE=python')
@@ -179,7 +179,7 @@ class ConfigurationTests(unittest.TestCase):
         p=self.shell('repo selected; result=$?; print -r -- "$PWD"; exit $result')
         self.assertEqual(p.stdout.strip(),str(root/'selected'))
         self.assertEqual(self.values()['ENGINE'],'python')
-        self.assertIn('1.7a',self.shell('repo --version').stdout)
+        self.assertIn('1.8a',self.shell('repo --version').stdout)
 
     def test_web_focus_controls_and_rf(self):
         self.conf('ENGINE=zsh','USE_GHQ=false','RETURN_TERMINAL=false')
@@ -443,24 +443,69 @@ class ConfigurationTests(unittest.TestCase):
             'repo.zsh': 'zsh', 'repo.pl': 'perl', 'repo.py': 'python3',
             'test_repo_config.py': 'python3', 'test_repo_local.py': 'python3',
         }
-        for name, runtime in scripts.items():
-            with self.subTest(script=name):
-                result = self.run_command([runtime, HERE/name, '--version'])
-                self.assertEqual(result.stdout.strip(), name + ' 1.7a')
+        for name, runtime, flag in ((n, r, f) for n, r in scripts.items() for f in ('-v', '--version')):
+            with self.subTest(script=name, flag=flag):
+                result = self.run_command([runtime, HERE/name, flag])
+                self.assertEqual(result.stdout.strip(), name + ' 1.8a')
                 self.assertEqual(result.stderr, '')
-                self.assertIn('# Version: 1.7a', (HERE/name).read_text())
-                result = self.run_command([HERE/name, '--version'])
-                self.assertEqual(result.stdout.strip(), name + ' 1.7a')
+                self.assertIn('# Version: 1.8a', (HERE/name).read_text())
+                result = self.run_command([HERE/name, flag])
+                self.assertEqual(result.stdout.strip(), name + ' 1.8a')
         self.assertFalse((self.actual/'rep.conf').exists())
         self.assertFalse((self.home/'.zshrc').exists())
         self.assertEqual(self.calls(), [])
+
+    def test_option_only_repository_calls_have_no_side_effects(self):
+        for engine in ('zsh', 'perl', 'python'):
+            result = self.repo(engine, '--unknown', '-ignored', '--')
+            self.assertEqual(result.stdout, '')
+            self.assertEqual(result.stderr, '')
+        for command in ('repo', 'rz', 'rp', 'ry', 'rf'):
+            result = self.shell(command + ' --unknown -ignored')
+            self.assertEqual(result.stdout, '')
+            self.assertEqual(result.stderr, '')
+        self.assertFalse((self.actual/'rep.conf').exists())
+        self.assertEqual(self.calls(), [])
+
+    def test_skipped_arguments_preserve_first_destination(self):
+        self.conf('OPEN_WEB=false', 'USE_GHQ=false')
+        for engine in ('zsh', 'perl', 'python'):
+            name = 'filtered-' + engine
+            result = self.repo(engine, '--ignored', name, '-skip', '--', name + '-second')
+            self.assertEqual(result.stdout.strip(), str(self.home/'Projects'/name))
+            self.assertTrue((self.home/'Projects'/(name+'-second')/'.git').is_dir())
+            self.assertFalse((self.home/'Projects'/'-skip').exists())
+
+    def test_shell_short_version_is_read_only(self):
+        for command in ('repo', 'rz', 'rp', 'ry', 'rf', 'conf'):
+            result = self.shell(command + ' -v')
+            self.assertIn('1.8a', result.stdout)
+        self.assertFalse((self.actual/'rep.conf').exists())
+        self.assertEqual(self.calls(), [])
+
+    def test_em_dash_version_is_not_a_version_option(self):
+        scripts = {
+            'repo_conf.zsh': 'zsh', 'repo_install.zsh': 'zsh',
+            'repo_shell.zsh': 'zsh', 'repo_term.zsh': 'zsh',
+            'repo.zsh': 'zsh', 'repo.pl': 'perl', 'repo.py': 'python3',
+            'test_repo_config.py': 'python3', 'test_repo_local.py': 'python3',
+        }
+        for name, runtime in scripts.items():
+            with self.subTest(script=name):
+                result = subprocess.run([runtime, str(HERE/name), '—version'],
+                                        cwd=self.home, env=self.env, input='',
+                                        text=True, capture_output=True)
+                self.assertNotEqual(result.stdout.strip(), name + ' 1.8a')
+        for command in ('repo', 'rz', 'rp', 'ry'):
+            result = self.shell(command + ' —version', ok=False, data='')
+            self.assertNotEqual(result.stdout.strip(), 'repo 1.8a')
 
     def test_sourcing_shell_with_version_argument_does_not_exit(self):
         result = self.run_command([
             'zsh', '-c', 'source "$1" --version; print -r -- alive; repo --version',
             'test', HERE/'repo_shell.zsh',
         ])
-        self.assertEqual(result.stdout.splitlines(), ['alive', 'repo 1.7a'])
+        self.assertEqual(result.stdout.splitlines(), ['alive', 'repo 1.8a'])
         self.assertFalse((self.actual/'rep.conf').exists())
 
     def test_legacy_source_migration_and_numbered_dotfiles_backup(self):
@@ -534,7 +579,7 @@ class ConfigurationTests(unittest.TestCase):
 
 
 if __name__ == '__main__':
-    if '--version' in sys.argv[1:]:
+    if any(flag in sys.argv[1:] for flag in ('-v', '--version')):
         print(f'test_repo_config.py {SCRIPT_VERSION}')
     else:
         unittest.main()

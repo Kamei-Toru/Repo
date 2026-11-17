@@ -1,4 +1,4 @@
-# Repo — Version 1.7a
+# Repo — Version 1.8a
 
 Prepare GitHub repositories, open their remote pages, and enter the first local
 project from zsh. The zsh, Perl, and Python workflows share a validated
@@ -12,7 +12,7 @@ rf
 
 ## Installation
 
-All nine scripts carry a `Version: 1.7a` comment and support `--version` without
+All nine scripts carry a `Version: 1.8a` comment and support `--version` without
 reading configuration, creating directories, or contacting GitHub. For example:
 
 ```zsh
@@ -44,7 +44,7 @@ source ~/.zshrc
 repo --version
 ```
 
-Expected shell version: `repo 1.7a`.
+Expected shell version: `repo 1.8a`.
 
 The installer updates named files individually in `~/Projects/Repo` and creates
 matching links in `~/Repo`. It keeps `.git`, unrelated files, and existing
@@ -217,7 +217,7 @@ verification fails while retaining any available local destination.
 
 See [REVIEW.md](REVIEW.md) for the review findings, fixes, and regression tests.
 
-## Version 1.7a migration
+## Version 1.8a migration
 
 The helper files are now `repo_install.zsh`, `repo_shell.zsh`, and
 `repo_term.zsh`, avoiding collisions with helper names from other projects.
@@ -230,10 +230,26 @@ startup link is `~/.zshrc`. On a case-insensitive filesystem, an existing link
 spelled `dotfiles` is accepted if it identifies that same physical file. A link
 to an unrelated configuration is rejected rather than silently redirected.
 
-## Version 1.7a filename update
+## Version 1.8a filename update
 
 The configuration manager is now `repo_conf.zsh`. The test entry points are
 `test_repo_config.py` and `test_repo_local.py`. All callers, installation links,
 module imports, version output, and examples use the new names. The `conf` shell
 command and the `rep.conf` data filename are unchanged. Every script reports
-version `1.7a` with `--version`. Existing configuration values are preserved.
+version `1.8a` with `--version`. Existing configuration values are preserved.
+
+## Version 1.8a argument handling
+
+All nine scripts support `-v` and `--version` without side effects.
+The `repo`, `rz`, `rp`, and `ry` commands skip repository arguments starting
+with ASCII `-`, including `--`; help and version options take precedence.
+If all repository arguments are skipped, the command exits successfully without
+prompting, loading settings, opening a browser, or changing directories.
+With no arguments, repository commands still prompt for a name. For example,
+`repo --ignored alpha -skip beta` prepares alpha and beta and enters alpha.
+
+Use `conf --visibility public` or `conf --visibility private` to set visibility.
+The former visibility shortcut `conf -v MODE` is replaced by the version option.
+`rf -v` displays its version; other arguments to `rf` skip repository selection.
+Configuration, installer, and terminal-helper options retain their validation;
+configuration values such as `--dir PATH` continue to be parsed normally.

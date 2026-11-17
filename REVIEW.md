@@ -1,4 +1,4 @@
-# Source review: 1.7a
+# Source review: 1.8a
 
 The review examined configuration parsing and updates, installation, Git URL
 validation, directory navigation on failure, and consistency across the three
@@ -35,9 +35,9 @@ that application activation alone proves a visible desktop switch. Rollback
 preserves externally modified files and reports them instead of overwriting
 concurrent changes. Newly created valid configuration data is retained.
 
-## Version 1.7a follow-up review
+## Version 1.8a follow-up review
 
-- All nine executable scripts have an English `Version: 1.7a` comment and a
+- All nine executable scripts have an English `Version: 1.8a` comment and a
   side-effect-free `--version` path; the sourced shell file does not exit its
   caller when the caller supplies that argument.
 - The three renamed helper paths are used by all runtime implementations,
@@ -52,14 +52,28 @@ concurrent changes. Newly created valid configuration data is retained.
 - The full suite includes 31 tests plus per-script and per-runtime subtests.
   Real GUI switching across Spaces remains outside the automated test scope.
 
-The Version 1.7a identity review also rejects a separate hard-linked startup
+The Version 1.8a identity review also rejects a separate hard-linked startup
 file: an inode match alone is insufficient for a file that will be replaced
 atomically. Accepted aliases must identify the same directory entry.
 
-## Version 1.7a rename review
+## Version 1.8a rename review
 
 Verified that the three renamed files are used consistently by the installer,
 all repository runtimes, shell functions, and the compatibility test entry
 point. All nine scripts retain side-effect-free `--version` handling and
-version comments set to `1.7a`. No configuration keys or repository behavior
+version comments set to `1.8a`. No configuration keys or repository behavior
 were changed for this filename-only update.
+
+## Version 1.8a review
+
+Reviewed argument filtering before configuration and terminal focus side effects
+in all repository runtimes and shell wrappers. Help and version take precedence.
+Checked the configuration visibility shortcut conflict: `-v` now reports the
+version; `--visibility` remains available. Added integration coverage for skipped
+arguments, first-destination selection, and side-effect-free short versions.
+
+## Version 1.8a option review
+
+Removed the em-dash version alias from all nine scripts and shell functions.
+Version output accepts only `-v` and `--version`. Added regression coverage
+confirming that an em-dash argument does not select version output.

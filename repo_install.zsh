@@ -1,7 +1,7 @@
 #!/bin/zsh
-# Version: 1.7a
-REPO_SCRIPT_VERSION=1.7a
-if (( ${argv[(Ie)--version]} )); then
+# Version: 1.8a
+REPO_SCRIPT_VERSION=1.8a
+if (( ${argv[(Ie)-v]} || ${argv[(Ie)--version]} )); then
   print -r -- "repo_install.zsh $REPO_SCRIPT_VERSION"
   exit 0
 fi
@@ -10,7 +10,7 @@ emulate -LR zsh
 if [[ ${1:-} == -h || ${1:-} == --help || ${1:-} == —help ]]; then
   print 'Usage: zsh repo_install.zsh'
   print 'Validate configuration, back up changed files, then install Repo and links.'
-  print 'Options: -h, --help, --version'
+  print 'Options: -h, --help, -v, --version'
   print 'Exit status: 0 success or help; 1 installation error; 2 invalid argument; 130 cancelled.'
   exit 0
 fi
@@ -28,7 +28,7 @@ import sys
 import tempfile
 import time
 
-VERSION = '1.7a'
+VERSION = '1.8a'
 FILES = ('README.md', 'REVIEW.md', 'repo.zsh', 'repo.pl', 'repo.py', 'repo_shell.zsh',
          'repo_conf.zsh', 'repo_term.zsh', 'repo_install.zsh', 'test_repo_local.py', 'test_repo_config.py')
 source = Path(sys.argv[1])
