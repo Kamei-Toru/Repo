@@ -1,13 +1,18 @@
+#!/bin/zsh
+# Version: 1.7a
+# Sourcing this file must never exit the caller or consume its options.
+if [[ $ZSH_EVAL_CONTEXT != *:file ]] && (( ${argv[(Ie)--version]} )); then
+  print -r -- 'repo_shell.zsh 1.7a'
+  exit 0
+fi
 # Repo shell integration. Runtime scripts are invoked through ~/Repo links.
-# Version: 1.6
 # Source this file from ~/.zshrc.
-# This script was generated using GitHub
-typeset -g REPO_SHELL_VERSION=1.6
+typeset -g REPO_SHELL_VERSION=1.7a
 typeset -g R_HOME=${R_HOME:-$HOME/Repo}
 _repo_load_config() {
   emulate -L zsh
-  local manager="$R_HOME/conf.zsh" settings key val
-  [[ -f $manager ]] || { print -ru2 -- "Missing configuration manager: $manager. Run install.zsh."; return 1; }
+  local manager="$R_HOME/repo_conf.zsh" settings key val
+  [[ -f $manager ]] || { print -ru2 -- "Missing configuration manager: $manager. Run repo_install.zsh."; return 1; }
   settings=$(R_HOME="$R_HOME" zsh "$manager" --env) || return $?
   typeset -gA REPO_CONFIG
   REPO_CONFIG=()
@@ -15,15 +20,15 @@ _repo_load_config() {
     [[ -n $key ]] && REPO_CONFIG[$key]=$val
   done <<< "$settings"
 }
-conf() { R_HOME="$R_HOME" zsh "$R_HOME/conf.zsh" "$@"; }
+conf() { R_HOME="$R_HOME" zsh "$R_HOME/repo_conf.zsh" "$@"; }
 _repo_capture() {
-  local helper="$R_HOME/term.zsh"
-  [[ -f $helper ]] || { print -ru2 -- "Missing terminal helper: $helper. Run install.zsh."; return 1; }
+  local helper="$R_HOME/repo_term.zsh"
+  [[ -f $helper ]] || { print -ru2 -- "Missing terminal helper: $helper. Run repo_install.zsh."; return 1; }
   zsh "$helper" capture
 }
 _repo_restore() {
-  local helper="$R_HOME/term.zsh" debug=${R_FOCUS_DEBUG:-${REPO_CONFIG[FOCUS_DEBUG]:-false}}
-  [[ -f $helper ]] || { print -ru2 -- "Missing terminal helper: $helper. Run install.zsh."; return 1; }
+  local helper="$R_HOME/repo_term.zsh" debug=${R_FOCUS_DEBUG:-${REPO_CONFIG[FOCUS_DEBUG]:-false}}
+  [[ -f $helper ]] || { print -ru2 -- "Missing terminal helper: $helper. Run repo_install.zsh."; return 1; }
   zsh "$helper" restore "$1" "${2:-}" "$debug"
 }
 
@@ -32,8 +37,8 @@ _r_call() {
   local -x R_HOME=${R_HOME:-$HOME/Repo}
   local destination rc=0 focus_rc=0
   local -a command_line
-  if [[ ${1:-} == --version ]]; then
-    print -r -- "Repo shell $REPO_SHELL_VERSION"
+  if (( ${argv[(Ie)--version]} )); then
+    print -r -- "repo $REPO_SHELL_VERSION"
     return 0
   fi
   if ! (( ${argv[(Ie)-h]} || ${argv[(Ie)--help]} || ${argv[(Ie)—help]} )); then

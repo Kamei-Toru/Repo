@@ -1,8 +1,12 @@
 #!/usr/bin/env perl
-# Version: 1.6
-# This script was generated using GitHub.
+# Version: 1.7a
 use strict;
 use warnings;
+use constant SCRIPT_VERSION => '1.7a';
+if (grep { $_ eq '--version' } @ARGV) {
+    print 'repo.pl ' . SCRIPT_VERSION . "\n";
+    exit 0;
+}
 use Cwd qw(abs_path getcwd);
 use File::Path qw(make_path);
 use File::Find;
@@ -39,8 +43,8 @@ sub cmd {
     return $out;
 }
 sub load_config {
-    my $manager = ($ENV{R_HOME} // "$ENV{HOME}/Repo") . '/conf.zsh';
-    die "Missing configuration manager: $manager. Run install.zsh.\n" unless -f $manager;
+    my $manager = ($ENV{R_HOME} // "$ENV{HOME}/Repo") . '/repo_conf.zsh';
+    die "Missing configuration manager: $manager. Run repo_install.zsh.\n" unless -f $manager;
     my $data = cmd('zsh', $manager, '--env');
     my %settings;
     for my $line (split /\n/, $data) {
@@ -119,7 +123,7 @@ sub open_web {
     my ($full) = @_;
     return unless $CONFIG{OPEN_WEB} eq 'true';
     my $restore = $CONFIG{RETURN_TERMINAL} eq 'true' && ($ENV{R_DEFER_FOCUS} // '') ne '1';
-    my $helper = ($ENV{R_HOME} // "$ENV{HOME}/Repo") . '/term.zsh';
+    my $helper = ($ENV{R_HOME} // "$ENV{HOME}/Repo") . '/repo_term.zsh';
     my $app = $ENV{R_RETURN_APP} // '';
     if ($restore && !length $app) {
         my ($code, $out) = run('zsh', $helper, 'capture');
@@ -225,6 +229,7 @@ Arguments:
 
 Options:
   -h, --help           Show this help.
+  --version            Show the script version.
 
 Exit status:
   0                    Success (including help).

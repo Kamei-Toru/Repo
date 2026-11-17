@@ -1,11 +1,16 @@
 #!/bin/zsh
+# Version: 1.7a
+REPO_SCRIPT_VERSION=1.7a
+if (( ${argv[(Ie)--version]} )); then
+  print -r -- "repo_install.zsh $REPO_SCRIPT_VERSION"
+  exit 0
+fi
 # Install an explicitly named file set; preserve Git metadata and user settings.
-# Version: 1.6
-# This script was generated using GitHub.
 emulate -LR zsh
 if [[ ${1:-} == -h || ${1:-} == --help || ${1:-} == —help ]]; then
   print 'Usage: zsh repo_install.zsh'
   print 'Validate configuration, back up changed files, then install Repo and links.'
+  print 'Options: -h, --help, --version'
   print 'Exit status: 0 success or help; 1 installation error; 2 invalid argument; 130 cancelled.'
   exit 0
 fi
@@ -23,17 +28,14 @@ import sys
 import tempfile
 import time
 
-VERSION = '1.6'
-FILES = ('README.md', 'REVIEW.md', 'repo.zsh', 'repo.pl', 'repo.py', 'shell.zsh',
-         'conf.zsh', 'term.zsh', 'repo_install.zsh', 'test_local.py', 'test_config.py')
-# Version 1.1
-
-# This script was generated using GitHub
+VERSION = '1.7a'
+FILES = ('README.md', 'REVIEW.md', 'repo.zsh', 'repo.pl', 'repo.py', 'repo_shell.zsh',
+         'repo_conf.zsh', 'repo_term.zsh', 'repo_install.zsh', 'test_repo_local.py', 'test_repo_config.py')
 source = Path(sys.argv[1])
 home = Path.home()
 actual = home / 'Projects/Repo'
 public = home / 'Repo'
-startup = home / 'Projects/dotfiles/.zshrc'
+startup = home / 'Projects/Dotfiles/.zshrc'
 root_startup = home / '.zshrc'
 written = []
 made_links = []
@@ -46,6 +48,18 @@ def interrupt_install(signum, frame):
 
 for handled_signal in (signal.SIGTERM, signal.SIGHUP):
     signal.signal(handled_signal, interrupt_install)
+
+
+def same_target(left, right):
+    left_path, right_path = left.resolve(), right.resolve()
+    if left_path == right_path:
+        return True
+    # Accept alternate parent-directory spellings for the same directory entry.
+    # A separate hard link is not equivalent when the target is replaced atomically.
+    return (left_path.name == right_path.name
+            and left_path.exists() and right_path.exists()
+            and os.path.samefile(left_path.parent, right_path.parent)
+            and os.path.samefile(left_path, right_path))
 
 
 def atomic_write(path, data, mode):
@@ -88,7 +102,7 @@ def backup_startup():
 
 
 def validate_config(mode):
-    manager = source / 'conf.zsh' if mode == '--check' else public / 'conf.zsh'
+    manager = source / 'repo_conf.zsh' if mode == '--check' else public / 'repo_conf.zsh'
     result = subprocess.run(['zsh', str(manager), mode], text=True,
                             capture_output=True, env=dict(os.environ, R_HOME=str(public)))
     if result.returncode:
@@ -146,7 +160,7 @@ try:
             raise RuntimeError(f'Expected a physical target file: {target}')
     if startup.is_symlink() or (startup.exists() and not startup.is_file()):
         raise RuntimeError(f'Expected a physical zsh configuration: {startup}')
-    if root_startup.is_symlink() and root_startup.resolve() != startup.resolve():
+    if root_startup.is_symlink() and not same_target(root_startup, startup):
         raise RuntimeError(f'Unexpected zsh startup link: {root_startup}')
     if root_startup.exists() and not root_startup.is_symlink():
         raise RuntimeError(f'Expected the dotfiles symlink: {root_startup}')
@@ -192,12 +206,16 @@ try:
     # Keep a newly created valid configuration even if a later startup update fails.
     validate_config('--env')
     original = startup_original
-    old = 'source "$HOME/Projects/Repo/shell.zsh"'
-    new = 'source "$HOME/Repo/shell.zsh"'
+    legacy_sources = {
+        'source "$HOME/Projects/Repo/shell.zsh"',
+        'source "$HOME/Repo/shell.zsh"',
+        'source "$HOME/Projects/Repo/repo_shell.zsh"',
+    }
+    new = 'source "$HOME/Repo/repo_shell.zsh"'
     assignment = 'R_HOME="$HOME/Repo"'
     result, found = [], False
     for line in original.splitlines(keepends=True):
-        if line.strip() in (old, new):
+        if line.strip() in legacy_sources or line.strip() == new:
             found = True
             if not result or result[-1].strip() != assignment:
                 result.append(assignment + '\n')
@@ -226,7 +244,7 @@ try:
     if backup_dir.is_dir():
         print(f'Previous project files: {backup_dir}')
     print('Reload: source ~/.zshrc')
-    print(f'Verify: repo --version (expected: Repo shell {VERSION})')
+    print(f'Verify: repo --version (expected: repo {VERSION})')
 except (Exception, KeyboardInterrupt) as error:
     restored = rollback()
     if not restored:
