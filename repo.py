@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
+# Version: 1.7a
 """Prepare GitHub repositories. All subprocess arguments are passed without a shell."""
-# Version: 1.6
-# This script was generated using GitHub.
 import os
 from pathlib import Path
 import re
@@ -10,6 +9,8 @@ import subprocess
 import sys
 
 os.environ["GH_HOST"] = "github.com"
+
+SCRIPT_VERSION = "1.7a"
 
 HELP = """repo - Prepare GitHub repositories for local development.
 Settings: ~/Repo/rep.conf (created automatically when missing).
@@ -25,6 +26,7 @@ Arguments:
 
 Options:
   -h, --help           Show this help.
+  --version            Show the script version.
 
 Exit status:
   0                    Success (including help).
@@ -45,9 +47,9 @@ TERMINAL_FAILED = False
 
 
 def load_config():
-    manager = Path(os.environ.get("R_HOME", str(Path.home() / "Repo"))) / "conf.zsh"
+    manager = Path(os.environ.get("R_HOME", str(Path.home() / "Repo"))) / "repo_conf.zsh"
     if not manager.is_file():
-        raise RuntimeError(f"Missing configuration manager: {manager}. Run install.zsh.")
+        raise RuntimeError(f"Missing configuration manager: {manager}. Run repo_install.zsh.")
     data = run("zsh", str(manager), "--env").stdout
     return dict(line.split("=", 1) for line in data.splitlines() if line)
 
@@ -154,7 +156,7 @@ def open_web(full):
     if CONFIG["OPEN_WEB"] != "true":
         return
     restore = CONFIG["RETURN_TERMINAL"] == "true" and os.environ.get("R_DEFER_FOCUS") != "1"
-    helper = Path(os.environ.get("R_HOME", str(Path.home() / "Repo"))) / "term.zsh"
+    helper = Path(os.environ.get("R_HOME", str(Path.home() / "Repo"))) / "repo_term.zsh"
     terminal_app = os.environ.get("R_RETURN_APP", "")
     if restore and not terminal_app:
         capture = run("zsh", str(helper), "capture", check=False)
@@ -245,6 +247,9 @@ def prepare(root, owner, name):
 def main():
     global CONFIG
     args = sys.argv[1:]
+    if "--version" in args:
+        print(f"repo.py {SCRIPT_VERSION}")
+        return 0
     if "-h" in args or "--help" in args or "—help" in args:
         print(HELP)
         return 0

@@ -1,10 +1,14 @@
 #!/bin/zsh
-# Shared terminal activation and verification; called through ~/Repo/term.zsh.
-# Version: 1.6
-# This script was generated using GitHub.
+# Version: 1.7a
+REPO_SCRIPT_VERSION=1.7a
+if (( ${argv[(Ie)--version]} )); then
+  print -r -- "repo_term.zsh $REPO_SCRIPT_VERSION"
+  exit 0
+fi
+# Shared terminal activation and verification; called through ~/Repo/repo_term.zsh.
 emulate -LR zsh
 setopt typesetsilent
-REPO_SHELL_VERSION=20261115.6
+REPO_SHELL_VERSION=1.7a
 _term_capture() {
   emulate -L zsh
   (( $+commands[osascript] )) || return 1
@@ -107,25 +111,25 @@ APPLESCRIPT
     case $focus_result in
       TTY)
         if [[ $debug == 1 || $debug == true ]]; then
-          print -ru2 -- "Terminal restored to the original TTY (Repo shell $REPO_SHELL_VERSION)."
+          print -ru2 -- "Terminal restored to the original TTY (Repo $REPO_SHELL_VERSION)."
         fi
         ;;
       FRONT)
         if [[ $debug == 1 || $debug == true ]]; then
-          print -ru2 -- "Terminal restored using its front window; exact TTY was not matched (Repo shell $REPO_SHELL_VERSION)."
+          print -ru2 -- "Terminal restored using its front window; exact TTY was not matched (Repo $REPO_SHELL_VERSION)."
         fi
         ;;
       ACTIVE_ONLY)
-        print -ru2 -- "Warning: Terminal is active, but its window visibility could not be verified (Repo shell $REPO_SHELL_VERSION)."
+        print -ru2 -- "Warning: Terminal is active, but its window visibility could not be verified (Repo $REPO_SHELL_VERSION)."
         ;;
       *)
-        print -ru2 -- "Unexpected terminal verification result (Repo shell $REPO_SHELL_VERSION): $focus_result"
+        print -ru2 -- "Unexpected terminal verification result (Repo $REPO_SHELL_VERSION): $focus_result"
         return 1
         ;;
     esac
     return 0
   else
-    print -ru2 -- "Could not verify terminal activation; the window may already be visible (Repo shell $REPO_SHELL_VERSION)."
+    print -ru2 -- "Could not verify terminal activation; the window may already be visible (Repo $REPO_SHELL_VERSION)."
     [[ -n $focus_result ]] && print -ru2 -- "$focus_result"
     return 1
   fi
@@ -133,7 +137,8 @@ APPLESCRIPT
 case ${1:-} in
   -h|--help|—help)
     print 'term - Shared macOS terminal helper for Repo.'
-    print 'Usage: term.zsh capture | restore APP_PATH TTY [true|false|1|0]'
+    print 'Usage: repo_term.zsh capture | restore APP_PATH TTY [true|false|1|0]'
+    print 'Options: -h, --help, --version'
     print 'Exit status: 0 success; 1 unavailable/unverified; 2 invalid arguments.'
     exit 0 ;;
   capture)
@@ -146,5 +151,5 @@ case ${1:-} in
     [[ ${3:-false} == true || ${3:-false} == false || ${3:-false} == 1 || ${3:-false} == 0 ]] || { print -ru2 'DEBUG must be true, false, 1, or 0.'; exit 2; }
     (( $+commands[osascript] )) || { print -ru2 'macOS osascript is unavailable.'; exit 1; }
     _term_restore "$@" ;;
-  *) print -ru2 'Usage: term.zsh capture | restore APP_PATH TTY [DEBUG]'; exit 2 ;;
+  *) print -ru2 'Usage: repo_term.zsh capture | restore APP_PATH TTY [DEBUG]'; exit 2 ;;
 esac

@@ -1,12 +1,16 @@
 #!/usr/bin/env python3
+# Version: 1.7a
 """Isolated configuration and runtime tests; no real GitHub or GUI calls."""
 import json
+import sys
 import os
 from pathlib import Path
 import shutil
 import subprocess
 import tempfile
 import unittest
+
+SCRIPT_VERSION = "1.7a"
 
 HERE = Path(__file__).resolve().parent
 FAKE_GH = r'''#!/usr/bin/env python3
@@ -46,7 +50,7 @@ class ConfigurationTests(unittest.TestCase):
         self.home=Path(self.temp.name).resolve()
         self.actual=self.home/'Projects/Repo';self.actual.mkdir(parents=True)
         self.public=self.home/'Repo';self.public.mkdir()
-        for name in ('conf.zsh','term.zsh','repo.py','repo.pl','repo.zsh','shell.zsh'):
+        for name in ('repo_conf.zsh','repo_term.zsh','repo.py','repo.pl','repo.zsh','repo_shell.zsh'):
             shutil.copy2(HERE/name,self.actual/name)
             (self.public/name).symlink_to(self.actual/name)
         self.binary=self.home/'bin';self.binary.mkdir()
@@ -73,7 +77,7 @@ class ConfigurationTests(unittest.TestCase):
         if ok: self.assertEqual(p.returncode,0,p.stderr)
         else: self.assertNotEqual(p.returncode,0,p.stdout+p.stderr)
         return p
-    def conf(self,*args,**kw): return self.run_command(['zsh',self.public/'conf.zsh',*args],**kw)
+    def conf(self,*args,**kw): return self.run_command(['zsh',self.public/'repo_conf.zsh',*args],**kw)
     def values(self): return dict(line.split('=',1) for line in self.conf('--env').stdout.splitlines())
     def calls(self): return [json.loads(x) for x in self.log.read_text().splitlines()]
     def git(self,*args): return self.run_command(['git',*args]).stdout.strip()
@@ -81,7 +85,7 @@ class ConfigurationTests(unittest.TestCase):
         return self.run_command([{'zsh':'zsh','perl':'perl','python':'python3'}[engine],
                                  self.public/('repo.'+{'zsh':'zsh','perl':'pl','python':'py'}[engine]),*args],**kw)
     def shell(self,code,**kw):
-        return self.run_command(['zsh','-c','source "$HOME/Repo/shell.zsh"; '+code],**kw)
+        return self.run_command(['zsh','-c','source "$HOME/Repo/repo_shell.zsh"; '+code],**kw)
 
     def test_help_has_no_config_side_effect(self):
         for option in ('-h','--help','—help'):
@@ -94,6 +98,7 @@ class ConfigurationTests(unittest.TestCase):
         cfg=self.values()
         self.assertEqual(cfg['PROJECTS_DIR'],str(self.home/'Projects'))
         self.assertEqual(cfg['VISIBILITY'],'private')
+        self.assertIn('# Version: 1.7a',(self.actual/'rep.conf').read_text())
         self.assertTrue((self.public/'rep.conf').is_symlink())
         root=self.home/'Work projects'
         self.conf('--dir',root,'--visibility','public','ENGINE=python')
@@ -174,7 +179,7 @@ class ConfigurationTests(unittest.TestCase):
         p=self.shell('repo selected; result=$?; print -r -- "$PWD"; exit $result')
         self.assertEqual(p.stdout.strip(),str(root/'selected'))
         self.assertEqual(self.values()['ENGINE'],'python')
-        self.assertIn('20261115.6',self.shell('repo --version').stdout)
+        self.assertIn('1.7a',self.shell('repo --version').stdout)
 
     def test_web_focus_controls_and_rf(self):
         self.conf('ENGINE=zsh','USE_GHQ=false','RETURN_TERMINAL=false')
@@ -211,32 +216,32 @@ class ConfigurationTests(unittest.TestCase):
     def test_installer_accepts_directory_link_and_numbers_startup_backup(self):
         for link in self.public.iterdir(): link.unlink()
         self.public.rmdir();self.public.symlink_to(self.actual,target_is_directory=True)
-        startup=self.home/'Projects/dotfiles/.zshrc';startup.parent.mkdir()
-        startup.write_text('source "$HOME/Projects/Repo/shell.zsh"\n')
+        startup=self.home/'Projects/Dotfiles/.zshrc';startup.parent.mkdir()
+        startup.write_text('source "$HOME/Projects/Repo/repo_shell.zsh"\n')
         (self.home/'.zshrc').symlink_to(startup)
         from datetime import datetime
         backup=self.home/('.zshrc.'+datetime.now().strftime('%Y%m%d'))
         backup.write_text('Existing backup')
-        self.run_command(['zsh',HERE/'install.zsh'])
+        self.run_command(['zsh',HERE/'repo_install.zsh'])
         self.assertTrue(self.public.is_symlink())
         self.assertEqual(backup.read_text(),'Existing backup')
-        self.assertIn('Projects/Repo/shell.zsh',backup.with_name(backup.name+'.1').read_text())
+        self.assertIn('Projects/Repo/repo_shell.zsh',backup.with_name(backup.name+'.1').read_text())
         self.assertTrue((self.public/'rep.conf').is_file())
 
     def test_install_preserves_config_git_and_startup_backups(self):
         self.conf('VISIBILITY=public','OPEN_WEB=false')
         config=(self.actual/'rep.conf').read_bytes()
         (self.actual/'.git').mkdir();(self.actual/'.git/marker').write_text('preserve')
-        startup=self.home/'Projects/dotfiles/.zshrc';startup.parent.mkdir()
-        startup.write_text('# Custom\nsource "$HOME/Projects/Repo/shell.zsh"\n')
+        startup=self.home/'Projects/Dotfiles/.zshrc';startup.parent.mkdir()
+        startup.write_text('# Custom\nsource "$HOME/Projects/Repo/repo_shell.zsh"\n')
         (self.home/'.zshrc').symlink_to(startup)
         for _ in range(2):
-            self.run_command(['zsh',HERE/'install.zsh'])
+            self.run_command(['zsh',HERE/'repo_install.zsh'])
             self.assertEqual((self.actual/'rep.conf').read_bytes(),config)
             self.assertEqual((self.actual/'.git/marker').read_text(),'preserve')
-            self.assertTrue((self.public/'conf.zsh').is_symlink())
+            self.assertTrue((self.public/'repo_conf.zsh').is_symlink())
             self.assertTrue((self.public/'rep.conf').is_symlink())
-        self.assertIn('source "$HOME/Repo/shell.zsh"',startup.read_text())
+        self.assertIn('source "$HOME/Repo/repo_shell.zsh"',startup.read_text())
         self.assertEqual(len(list(self.home.glob('.zshrc.[0-9]*'))),1)
 
     def test_check_mode_is_read_only_and_rejects_empty_keys(self):
@@ -269,7 +274,7 @@ class ConfigurationTests(unittest.TestCase):
         real_git=shutil.which('git',path=self.env['PATH'])
         self.exe('git', '#!/usr/bin/env python3\nimport os,sys,time\nif sys.argv[1:3]==["check-ref-format","--branch"]: time.sleep(0.2)\nos.execv('+repr(real_git)+',[ '+repr(real_git)+' ,*sys.argv[1:]])\n'.replace('\\n','\n'))
         updates={'VISIBILITY':'public','ENGINE':'python','OPEN_WEB':'false','COMMIT_MESSAGE':'Concurrent update'}
-        jobs=[subprocess.Popen(['zsh',str(self.public/'conf.zsh'),key+'='+value],
+        jobs=[subprocess.Popen(['zsh',str(self.public/'repo_conf.zsh'),key+'='+value],
                                cwd=self.home,env=self.env,text=True,stdout=subprocess.PIPE,stderr=subprocess.PIPE)
               for key,value in updates.items()]
         for job in jobs:
@@ -289,10 +294,10 @@ class ConfigurationTests(unittest.TestCase):
 
     def test_invalid_config_aborts_install_before_writes(self):
         (self.actual/'rep.conf').write_text('VISIBILITY=invalid\n'.replace('\\n','\n'))
-        (self.actual/'shell.zsh').write_text('# Keep installed integration\n'.replace('\\n','\n'))
+        (self.actual/'repo_shell.zsh').write_text('# Keep installed integration\n'.replace('\\n','\n'))
         before={p.name:p.read_bytes() for p in self.actual.iterdir() if p.is_file()}
         links={p.name:p.readlink() for p in self.public.iterdir() if p.is_symlink()}
-        self.run_command(['zsh',HERE/'install.zsh'],ok=False)
+        self.run_command(['zsh',HERE/'repo_install.zsh'],ok=False)
         self.assertEqual({p.name:p.read_bytes() for p in self.actual.iterdir() if p.is_file()},before)
         self.assertEqual({p.name:p.readlink() for p in self.public.iterdir() if p.is_symlink()},links)
         self.assertFalse((self.home/'.repo-backups').exists())
@@ -300,13 +305,13 @@ class ConfigurationTests(unittest.TestCase):
 
     def test_installer_rolls_back_after_provisioning_failure(self):
         self.conf('OPEN_WEB=false')
-        (self.actual/'shell.zsh').write_text('# Original integration\n'.replace('\\n','\n'))
+        (self.actual/'repo_shell.zsh').write_text('# Original integration\n'.replace('\\n','\n'))
         (self.actual/'.git').mkdir();(self.actual/'.git/marker').write_text('keep')
         before={p.name:p.read_bytes() for p in self.actual.iterdir() if p.is_file()}
         links={p.name:p.readlink() for p in self.public.iterdir() if p.is_symlink()}
         real_zsh=shutil.which('zsh',path=self.env['PATH'])
         self.exe('zsh', '#!/usr/bin/env python3\nimport os,sys\nif sys.argv[-1:]==["--env"]:\n print("Simulated configuration provisioning failure",file=sys.stderr);sys.exit(1)\nos.execv('+repr(real_zsh)+',[ '+repr(real_zsh)+' ,*sys.argv[1:]])\n'.replace('\\n','\n'))
-        p=self.run_command([real_zsh,HERE/'install.zsh'],ok=False)
+        p=self.run_command([real_zsh,HERE/'repo_install.zsh'],ok=False)
         self.assertIn('Simulated configuration provisioning failure',p.stderr)
         self.assertEqual({p.name:p.read_bytes() for p in self.actual.iterdir() if p.is_file()},before)
         self.assertEqual({p.name:p.readlink() for p in self.public.iterdir() if p.is_symlink()},links)
@@ -315,45 +320,45 @@ class ConfigurationTests(unittest.TestCase):
 
     def test_non_utf8_startup_aborts_before_replacing_files(self):
         self.conf()
-        startup = self.home / 'Projects/dotfiles/.zshrc'
+        startup = self.home / 'Projects/Dotfiles/.zshrc'
         startup.parent.mkdir()
         startup.write_bytes(b'# invalid startup \xff\n')
         (self.home / '.zshrc').symlink_to(startup)
-        (self.actual / 'shell.zsh').write_text('# Original integration\n')
+        (self.actual / 'repo_shell.zsh').write_text('# Original integration\n')
         before = {p.name: p.read_bytes() for p in self.actual.iterdir() if p.is_file()}
-        self.run_command(['zsh', HERE / 'install.zsh'], ok=False)
+        self.run_command(['zsh', HERE / 'repo_install.zsh'], ok=False)
         self.assertEqual({p.name: p.read_bytes() for p in self.actual.iterdir() if p.is_file()}, before)
         self.assertFalse((self.home / '.repo-backups').exists())
 
     def test_concurrent_startup_edit_is_not_overwritten(self):
         self.conf('OPEN_WEB=false')
-        startup = self.home / 'Projects/dotfiles/.zshrc'
+        startup = self.home / 'Projects/Dotfiles/.zshrc'
         startup.parent.mkdir()
-        startup.write_text('source "$HOME/Projects/Repo/shell.zsh"\n')
+        startup.write_text('source "$HOME/Projects/Repo/repo_shell.zsh"\n')
         (self.home / '.zshrc').symlink_to(startup)
-        (self.actual / 'shell.zsh').write_text('# Original integration\n')
+        (self.actual / 'repo_shell.zsh').write_text('# Original integration\n')
         before = {p.name: p.read_bytes() for p in self.actual.iterdir() if p.is_file()}
         real_zsh = shutil.which('zsh', path=self.env['PATH'])
         wrapper = (
             '#!/usr/bin/env python3\n'
             'import os, sys, pathlib\n'
             'if sys.argv[-1:] == ["--env"]:\n'
-            '    (pathlib.Path.home()/"Projects/dotfiles/.zshrc").write_text("# User edit during install\\n")\n'
+            '    (pathlib.Path.home()/"Projects/Dotfiles/.zshrc").write_text("# User edit during install\\n")\n'
             f'os.execv({real_zsh!r}, [{real_zsh!r}, *sys.argv[1:]])\n'
         )
         self.exe('zsh', wrapper)
-        result = self.run_command([real_zsh, HERE / 'install.zsh'], ok=False)
+        result = self.run_command([real_zsh, HERE / 'repo_install.zsh'], ok=False)
         self.assertIn('changed during installation', result.stderr)
         self.assertEqual(startup.read_text(), '# User edit during install\n')
         self.assertEqual({p.name: p.read_bytes() for p in self.actual.iterdir() if p.is_file()}, before)
 
     def test_installer_rolls_back_on_termination(self):
         self.conf('OPEN_WEB=false')
-        (self.actual/'shell.zsh').write_text('# Keep this integration\n'.replace('\\n','\n'))
+        (self.actual/'repo_shell.zsh').write_text('# Keep this integration\n'.replace('\\n','\n'))
         before={p.name:p.read_bytes() for p in self.actual.iterdir() if p.is_file()}
         real_zsh=shutil.which('zsh',path=self.env['PATH'])
         self.exe('zsh', '#!/usr/bin/env python3\nimport os,sys,signal,time\nif sys.argv[-1:]==["--env"]:\n os.kill(os.getppid(),signal.SIGTERM);time.sleep(0.1);sys.exit(1)\nos.execv('+repr(real_zsh)+',[ '+repr(real_zsh)+' ,*sys.argv[1:]])\n'.replace('\\n','\n'))
-        p=self.run_command([real_zsh,HERE/'install.zsh'],ok=False)
+        p=self.run_command([real_zsh,HERE/'repo_install.zsh'],ok=False)
         self.assertEqual(p.returncode,130,p.stderr)
         self.assertEqual({p.name:p.read_bytes() for p in self.actual.iterdir() if p.is_file()},before)
         self.assertFalse((self.home/'.zshrc').exists())
@@ -411,11 +416,11 @@ class ConfigurationTests(unittest.TestCase):
 
     def test_shared_focus_results_and_direct_exit_status(self):
         for result in ('TTY','FRONT'):
-            p=self.run_command(['zsh',self.public/'term.zsh','restore','/Applications/Terminal.app/','/dev/example','false'],extra={'FOCUS_RESULT':result})
+            p=self.run_command(['zsh',self.public/'repo_term.zsh','restore','/Applications/Terminal.app/','/dev/example','false'],extra={'FOCUS_RESULT':result})
             self.assertEqual(p.stdout,'');self.assertEqual(p.stderr,'')
-            p=self.run_command(['zsh',self.public/'term.zsh','restore','/Applications/Terminal.app/','/dev/example','true'],extra={'FOCUS_RESULT':result})
+            p=self.run_command(['zsh',self.public/'repo_term.zsh','restore','/Applications/Terminal.app/','/dev/example','true'],extra={'FOCUS_RESULT':result})
             self.assertIn('Terminal restored',p.stderr)
-        p=self.run_command(['zsh',self.public/'term.zsh','restore','/Applications/Terminal.app/','','false'],extra={'FOCUS_RESULT':'ACTIVE_ONLY'})
+        p=self.run_command(['zsh',self.public/'repo_term.zsh','restore','/Applications/Terminal.app/','','false'],extra={'FOCUS_RESULT':'ACTIVE_ONLY'})
         self.assertIn('Warning:',p.stderr)
         self.conf('USE_GHQ=false')
         root=Path(self.values()['PROJECTS_DIR'])
@@ -426,9 +431,110 @@ class ConfigurationTests(unittest.TestCase):
             self.assertTrue((root/('focus-'+engine)/'.git').is_dir())
 
     def test_installer_rejects_unknown_options_without_side_effects(self):
-        p=self.run_command(['zsh',HERE/'install.zsh','--unexpected'],ok=False)
+        p=self.run_command(['zsh',HERE/'repo_install.zsh','--unexpected'],ok=False)
         self.assertEqual(p.returncode,2)
         self.assertFalse((self.home/'.repo-backups').exists())
 
 
-if __name__=='__main__': unittest.main()
+    def test_all_script_versions_are_read_only(self):
+        scripts = {
+            'repo_conf.zsh': 'zsh', 'repo_install.zsh': 'zsh',
+            'repo_shell.zsh': 'zsh', 'repo_term.zsh': 'zsh',
+            'repo.zsh': 'zsh', 'repo.pl': 'perl', 'repo.py': 'python3',
+            'test_repo_config.py': 'python3', 'test_repo_local.py': 'python3',
+        }
+        for name, runtime in scripts.items():
+            with self.subTest(script=name):
+                result = self.run_command([runtime, HERE/name, '--version'])
+                self.assertEqual(result.stdout.strip(), name + ' 1.7a')
+                self.assertEqual(result.stderr, '')
+                self.assertIn('# Version: 1.7a', (HERE/name).read_text())
+                result = self.run_command([HERE/name, '--version'])
+                self.assertEqual(result.stdout.strip(), name + ' 1.7a')
+        self.assertFalse((self.actual/'rep.conf').exists())
+        self.assertFalse((self.home/'.zshrc').exists())
+        self.assertEqual(self.calls(), [])
+
+    def test_sourcing_shell_with_version_argument_does_not_exit(self):
+        result = self.run_command([
+            'zsh', '-c', 'source "$1" --version; print -r -- alive; repo --version',
+            'test', HERE/'repo_shell.zsh',
+        ])
+        self.assertEqual(result.stdout.splitlines(), ['alive', 'repo 1.7a'])
+        self.assertFalse((self.actual/'rep.conf').exists())
+
+    def test_legacy_source_migration_and_numbered_dotfiles_backup(self):
+        self.conf('OPEN_WEB=false')
+        startup = self.home/'Projects/Dotfiles/.zshrc'
+        startup.parent.mkdir()
+        original = ('# User settings\n'
+                    'source "$HOME/Other/shell.zsh"\n'
+                    'source "$HOME/Repo/shell.zsh"\n')
+        startup.write_text(original)
+        (self.home/'.zshrc').symlink_to(startup)
+        other = self.home/'Other'; other.mkdir()
+        foreign = other/'shell.zsh'; foreign.write_text('# Another project\n')
+        (self.public/'shell.zsh').symlink_to(foreign)
+        from datetime import datetime
+        base = self.home/('.zshrc.'+datetime.now().strftime('%Y%m%d'))
+        base.write_text('Existing zero')
+        base.with_name(base.name+'.1').write_text('Existing one')
+        self.run_command(['zsh', HERE/'repo_install.zsh'])
+        self.assertEqual(base.read_text(), 'Existing zero')
+        self.assertEqual(base.with_name(base.name+'.1').read_text(), 'Existing one')
+        self.assertEqual(base.with_name(base.name+'.2').read_text(), original)
+        updated = startup.read_text()
+        self.assertIn('source "$HOME/Other/shell.zsh"', updated)
+        self.assertNotIn('source "$HOME/Repo/shell.zsh"', updated)
+        self.assertIn('source "$HOME/Repo/repo_shell.zsh"', updated)
+        self.assertEqual(foreign.read_text(), '# Another project\n')
+        self.assertTrue((self.public/'shell.zsh').is_symlink())
+        for name in ('repo_install.zsh','repo_shell.zsh','repo_term.zsh'):
+            self.assertTrue((self.public/name).is_symlink())
+            self.assertEqual((self.public/name).resolve(), (self.actual/name).resolve())
+        self.run_command(['zsh', HERE/'repo_install.zsh'])
+        self.assertFalse(base.with_name(base.name+'.3').exists())
+
+    def test_equivalent_dotfiles_alias_retains_startup_link(self):
+        self.conf('OPEN_WEB=false')
+        startup = self.home/'Projects/Dotfiles/.zshrc'
+        startup.parent.mkdir()
+        startup.write_text('source "$HOME/Projects/Repo/shell.zsh"\n')
+        alias = self.home/'Projects/dotfiles'
+        if not alias.exists():
+            alias.symlink_to(startup.parent, target_is_directory=True)
+        original_link = alias/'.zshrc'
+        (self.home/'.zshrc').symlink_to(original_link)
+        self.run_command(['zsh', HERE/'repo_install.zsh'])
+        self.assertEqual((self.home/'.zshrc').readlink(), original_link)
+        self.assertTrue((self.home/'.zshrc').samefile(startup))
+        self.assertIn('source "$HOME/Repo/repo_shell.zsh"', startup.read_text())
+
+    def test_unrelated_startup_link_is_not_retargeted(self):
+        foreign = self.home/'foreign.zshrc'; foreign.write_text('# Keep this file\n')
+        (self.home/'.zshrc').symlink_to(foreign)
+        before = {p.name:p.read_bytes() for p in self.actual.iterdir() if p.is_file()}
+        self.run_command(['zsh', HERE/'repo_install.zsh'], ok=False)
+        self.assertEqual(foreign.read_text(), '# Keep this file\n')
+        self.assertEqual((self.home/'.zshrc').resolve(), foreign)
+        self.assertEqual({p.name:p.read_bytes() for p in self.actual.iterdir() if p.is_file()}, before)
+
+
+    def test_separate_hard_link_is_not_accepted_as_startup_target(self):
+        startup = self.home/'Projects/Dotfiles/.zshrc'
+        startup.parent.mkdir()
+        startup.write_text('# Preserve both entries\n')
+        foreign = self.home/'foreign.zshrc'
+        os.link(startup, foreign)
+        (self.home/'.zshrc').symlink_to(foreign)
+        self.run_command(['zsh', HERE/'repo_install.zsh'], ok=False)
+        self.assertEqual(startup.read_text(), '# Preserve both entries\n')
+        self.assertEqual(foreign.read_text(), '# Preserve both entries\n')
+        self.assertEqual((self.home/'.zshrc').resolve(), foreign)
+
+
+if __name__ == '__main__':
+    if '--version' in sys.argv[1:]:
+        print(f'test_repo_config.py {SCRIPT_VERSION}')
+    else:
+        unittest.main()

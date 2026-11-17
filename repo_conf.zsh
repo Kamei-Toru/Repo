@@ -1,7 +1,11 @@
 #!/bin/zsh
+# Version: 1.7a
+REPO_SCRIPT_VERSION=1.7a
+if (( ${argv[(Ie)--version]} )); then
+  print -r -- "repo_conf.zsh $REPO_SCRIPT_VERSION"
+  exit 0
+fi
 # Parse literal configuration data. Never source or evaluate rep.conf.
-# Version: 1.6
-# This script was generated using GitHub.
 emulate -LR zsh
 setopt pipefail typesetsilent
 
@@ -9,7 +13,7 @@ _conf_main() {
   if (( ${argv[(Ie)-h]} || ${argv[(Ie)--help]} || ${argv[(Ie)—help]} )); then
     cat <<'HELP'
 conf - Configure Repo and create its local project directory.
-Usage: conf.zsh [KEY=VALUE ...] [options]
+Usage: repo_conf.zsh [KEY=VALUE ...] [options]
 Arguments:
   KEY=VALUE             Update a setting; retain other saved/default values.
 Options:
@@ -19,10 +23,11 @@ Options:
   --check               Validate only; create no files or directories.
   --reset               Start from defaults instead of saved settings.
   -h, --help            Show this help.
+  --version             Show the script version.
 Examples:
-  conf.zsh
-  conf.zsh --dir "$HOME/Work" --visibility private
-  conf.zsh OPEN_WEB=false ENGINE=python --show
+  repo_conf.zsh
+  repo_conf.zsh --dir "$HOME/Work" --visibility private
+  repo_conf.zsh OPEN_WEB=false ENGINE=python --show
 Exit status:
   0 Success or help.  1 File/lock error.  2 Invalid argument or setting.
 HELP
@@ -131,6 +136,7 @@ HELP
     if [[ $mode == save || ! -f $real || $reset == 1 || ${#updates} -gt 0 ]]; then
       tmp=$(mktemp "${real:h}/.rep.conf.XXXXXXXX") || return 1
       {
+        print -r -- "# Version: $REPO_SCRIPT_VERSION"
         print -r -- '# Repo configuration. Literal KEY=VALUE data; no shell evaluation.'
         for key in "${keys[@]}"; do print -r -- "$key=${cfg[$key]}"; done
       } > "$tmp" || return 1

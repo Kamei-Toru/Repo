@@ -1,7 +1,11 @@
 #!/bin/zsh
-# Prepare GitHub repositories; source shell.zsh to change the caller's directory.
-# Version: 1.6
-# This script was generated using GitHub.
+# Version: 1.7a
+REPO_SCRIPT_VERSION=1.7a
+if (( ${argv[(Ie)--version]} )); then
+  print -r -- "repo.zsh $REPO_SCRIPT_VERSION"
+  exit 0
+fi
+# Prepare GitHub repositories; source repo_shell.zsh to change the caller's directory.
 emulate -LR zsh
 setopt pipefail typesetsilent
 export GH_HOST=github.com
@@ -22,6 +26,7 @@ Arguments:
 
 Options:
   -h, --help           Show this help.
+  --version            Show the script version.
 
 Exit status:
   0                    Success (including help).
@@ -63,8 +68,8 @@ HELP
   return $failed
 }
 _r_load_config() {
-  local manager="${R_HOME:-$HOME/Repo}/conf.zsh" settings key val
-  [[ -f $manager ]] || { print -ru2 -- "Missing configuration manager: $manager. Run install.zsh."; return 1; }
+  local manager="${R_HOME:-$HOME/Repo}/repo_conf.zsh" settings key val
+  [[ -f $manager ]] || { print -ru2 -- "Missing configuration manager: $manager. Run repo_install.zsh."; return 1; }
   settings=$(zsh "$manager" --env) || return $?
   typeset -gA _r_cfg
   _r_cfg=()
@@ -91,7 +96,7 @@ _r_id() {
 }
 _r_web() {
   [[ ${_r_cfg[OPEN_WEB]} == true ]] || return 0
-  local helper="${R_HOME:-$HOME/Repo}/term.zsh" terminal_app=${R_RETURN_APP:-} web_status=0 restore=0
+  local helper="${R_HOME:-$HOME/Repo}/repo_term.zsh" terminal_app=${R_RETURN_APP:-} web_status=0 restore=0
   if [[ ${_r_cfg[RETURN_TERMINAL]} == true && ${R_DEFER_FOCUS:-0} != 1 ]]; then
     restore=1
     if [[ -z $terminal_app ]]; then

@@ -1,4 +1,4 @@
-# Repo
+# Repo — Version 1.7a
 
 Prepare GitHub repositories, open their remote pages, and enter the first local
 project from zsh. The zsh, Perl, and Python workflows share a validated
@@ -11,6 +11,17 @@ rf
 ```
 
 ## Installation
+
+All nine scripts carry a `Version: 1.7a` comment and support `--version` without
+reading configuration, creating directories, or contacting GitHub. For example:
+
+```zsh
+zsh ~/Repo/repo_conf.zsh --version
+zsh ~/Repo/repo_install.zsh --version
+zsh ~/Repo/repo_shell.zsh --version
+zsh ~/Repo/repo_term.zsh --version
+python3 ~/Repo/repo.py --version
+```
 
 Requirements: zsh (including its standard `zsh/system` module), Git, GitHub CLI,
 iconv, and the runtime you use (Perl or Python 3). macOS includes iconv.
@@ -33,7 +44,7 @@ source ~/.zshrc
 repo --version
 ```
 
-Expected shell version: `Repo shell 1.6`.
+Expected shell version: `repo 1.7a`.
 
 The installer updates named files individually in `~/Projects/Repo` and creates
 matching links in `~/Repo`. It keeps `.git`, unrelated files, and existing
@@ -43,13 +54,16 @@ The installer validates saved configuration before replacing any files. Each
 file is replaced atomically. On handled errors or interrupts, installer-owned
 writes are restored if no other process has changed them. A newly created,
 valid configuration is retained. Backups remain available for inspection.
-Changed zsh configuration is backed up as `~/.zshrc.YYYYMMDD`, then `.1`, `.2`,
-and so on, without overwriting existing backups.
+Before changing `~/Projects/Dotfiles/.zshrc`, the installer saves its physical
+contents as `~/.zshrc.YYYYMMDD`, then `~/.zshrc.YYYYMMDD.1`, `.2`, and so on.
+Numbering starts at 1, existing files are never overwritten, and an unchanged
+startup file does not create another backup. The home-directory `.zshrc` link
+is retained when it identifies the specified physical file.
 
 The startup arrangement is:
 
-- `~/.zshrc` links to `~/Projects/dotfiles/.zshrc`.
-- That file sets `R_HOME="$HOME/Repo"` and sources `~/Repo/shell.zsh`.
+- `~/.zshrc` links to `~/Projects/Dotfiles/.zshrc`.
+- That file sets `R_HOME="$HOME/Repo"` and sources `~/Repo/repo_shell.zsh`.
 - Runtime scripts and configuration are accessed through `~/Repo` links.
 
 ## Commands
@@ -70,7 +84,7 @@ functions can change the calling shell's directory.
 ## Configuration
 
 The physical file is `~/Projects/Repo/rep.conf`. All runtimes use the
-`~/Repo/rep.conf` link through the validating `~/Repo/conf.zsh` manager. The
+`~/Repo/rep.conf` link through the validating `~/Repo/repo_conf.zsh` manager. The
 manager creates a missing configuration and project directory automatically.
 A missing physical config is recreated from defaults before `repo` or `rf`
 continues. An invalid config is reported; it is never silently reset.
@@ -177,16 +191,16 @@ depends on macOS Mission Control, Automation, and Accessibility settings.
 ## Verification
 
 ```zsh
-python3 test_config.py
-zsh -n conf.zsh
-zsh -n term.zsh
-zsh -n shell.zsh
+python3 test_repo_config.py
+zsh -n repo_conf.zsh
+zsh -n repo_term.zsh
+zsh -n repo_shell.zsh
 zsh -n repo.zsh
 perl -c repo.pl
 python3 -m py_compile repo.py
 ```
 
-`test_local.py` invokes the same suite for compatibility.
+`test_repo_local.py` invokes the same suite for compatibility.
 
 Tests use real local Git repositories and mocked GitHub/browser/focus commands.
 They do not create real GitHub repositories, publish files, or switch desktops.
@@ -194,11 +208,32 @@ Actual GUI focus behavior must be checked on the target Mac.
 
 ## Shared terminal helper and source review
 
-`term.zsh` contains the single terminal capture/restore implementation used by
+`repo_term.zsh` contains the single terminal capture/restore implementation used by
 all runtimes and shell functions. It is installed physically in
-`~/Projects/Repo` and called through `~/Repo/term.zsh`. Successful restoration
+`~/Projects/Repo` and called through `~/Repo/repo_term.zsh`. Successful restoration
 remains silent by default; `ACTIVE_ONLY` remains a visibility warning. Direct
 runtime commands and shell functions return nonzero when activation
 verification fails while retaining any available local destination.
 
 See [REVIEW.md](REVIEW.md) for the review findings, fixes, and regression tests.
+
+## Version 1.7a migration
+
+The helper files are now `repo_install.zsh`, `repo_shell.zsh`, and
+`repo_term.zsh`, avoiding collisions with helper names from other projects.
+All runtime calls and new symbolic links use these names. Existing Repo source
+lines that load `shell.zsh` are migrated to `repo_shell.zsh`; unrelated project
+source lines and legacy physical files/links are not deleted.
+
+The required physical zsh configuration is `~/Projects/Dotfiles/.zshrc` and the
+startup link is `~/.zshrc`. On a case-insensitive filesystem, an existing link
+spelled `dotfiles` is accepted if it identifies that same physical file. A link
+to an unrelated configuration is rejected rather than silently redirected.
+
+## Version 1.7a filename update
+
+The configuration manager is now `repo_conf.zsh`. The test entry points are
+`test_repo_config.py` and `test_repo_local.py`. All callers, installation links,
+module imports, version output, and examples use the new names. The `conf` shell
+command and the `rep.conf` data filename are unchanged. Every script reports
+version `1.7a` with `--version`. Existing configuration values are preserved.
