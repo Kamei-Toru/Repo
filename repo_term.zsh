@@ -1,6 +1,6 @@
 #!/bin/zsh
-# Version: 1.8a
-REPO_SCRIPT_VERSION=1.8a
+# Version: 1.8b
+REPO_SCRIPT_VERSION=1.8b
 if (( ${argv[(Ie)-v]} || ${argv[(Ie)--version]} )); then
   print -r -- "repo_term.zsh $REPO_SCRIPT_VERSION"
   exit 0
@@ -8,7 +8,8 @@ fi
 # Shared terminal activation and verification; called through ~/Repo/repo_term.zsh.
 emulate -LR zsh
 setopt typesetsilent
-REPO_SHELL_VERSION=1.8a
+REPO_SHELL_VERSION=1.8b
+
 _term_capture() {
   emulate -L zsh
   (( $+commands[osascript] )) || return 1
@@ -19,6 +20,7 @@ _term_capture() {
   esac
   osascript -e "$capture_script" 2>/dev/null
 }
+
 _term_restore() {
   emulate -L zsh
   local focus_script focus_result debug=${3:-false}
@@ -33,6 +35,7 @@ on run argv
     set windowDetail to ""
     repeat 8 times
         set windowKind to "ACTIVE_ONLY"
+        set windowDetail to ""
         tell application terminalPath to activate
         if terminalID is "com.apple.Terminal" then
             try
@@ -40,31 +43,51 @@ on run argv
                     set targetWindow to missing value
                     set targetTab to missing value
                     if callerTTY is not "" then
-                        repeat with candidateWindow in windows
-                            repeat with candidateTab in tabs of candidateWindow
-                                if tty of candidateTab is callerTTY then
-                                    set targetWindow to contents of candidateWindow
-                                    set targetTab to contents of candidateTab
-                                    exit repeat
-                                end if
+                        -- Resolve numeric IDs, not references into "every window".
+                        -- Keep lookup errors separate from the front-window fallback.
+                        try
+                            set windowIDs to get id of every window
+                            repeat with candidateID in windowIDs
+                                set windowIDValue to contents of candidateID
+                                try
+                                    set tabCount to count of tabs of window id windowIDValue
+                                    repeat with tabIndex from 1 to tabCount
+                                        set tabTTY to get tty of tab tabIndex of window id windowIDValue
+                                        if tabTTY is callerTTY then
+                                            set matchedWindow to get window id windowIDValue
+                                            set matchedTab to get tab tabIndex of window id windowIDValue
+                                            set targetWindow to matchedWindow
+                                            set targetTab to matchedTab
+                                            exit repeat
+                                        end if
+                                    end repeat
+                                on error lookupMessage number lookupNumber
+                                    -- A window or tab can disappear during enumeration.
+                                    set windowDetail to lookupMessage & " (" & lookupNumber & ")"
+                                end try
+                                if targetWindow is not missing value then exit repeat
                             end repeat
-                            if targetWindow is not missing value then exit repeat
-                        end repeat
+                        on error lookupMessage number lookupNumber
+                            set windowDetail to lookupMessage & " (" & lookupNumber & ")"
+                        end try
                     end if
-                    -- A nested shell or multiplexer may have a different TTY.
-                    -- Keep window restoration independent of an exact TTY match.
-                    if targetWindow is missing value and (exists front window) then
-                        set targetWindow to front window
+                    -- script/tmux can use a different TTY from Terminal's tab.
+                    if targetWindow is missing value then
+                        if exists front window then
+                            set targetWindow to get front window
+                        end if
                     end if
                     if targetWindow is not missing value then
                         if targetTab is not missing value then set selected of targetTab to true
                         set miniaturized of targetWindow to false
                         set index of targetWindow to 1
                         activate
-                        if targetTab is missing value then
-                            set windowKind to "FRONT"
-                        else
-                            set windowKind to "TTY"
+                        if (miniaturized of targetWindow is false) and ((id of front window) is (id of targetWindow)) then
+                            if targetTab is missing value then
+                                set windowKind to "FRONT"
+                            else
+                                set windowKind to "TTY"
+                            end if
                         end if
                     end if
                 end tell
@@ -134,6 +157,7 @@ APPLESCRIPT
     return 1
   fi
 }
+
 case ${1:-} in
   -h|--help|—help)
     print 'term - Shared macOS terminal helper for Repo.'
